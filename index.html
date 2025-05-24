@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لعبة مطابقة البطاقات - Memory Puzzle</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      transition: background 0.5s ease-in-out;
+      padding: 10px;
+      color: #fff;
+    }
+
+    h1 {
+      font-size: 2em;
+      text-align: center;
+    }
+
+    #welcomeMsg {
+      margin: 10px 0;
+      font-size: 1.2em;
+      color: #74b9ff;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .game-info {
+      margin: 8px 0;
+      font-size: 1em;
+      color: #81ecec;
+    }
+
+    .game-board {
+      display: grid;
+      grid-template-columns: repeat(5, 70px);
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .card {
+      width: 70px;
+      height: 70px;
+      background-color: #b2bec3;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8em;
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.3s, background 0.3s;
+    }
+
+    .card.flipped {
+      background-color: #ffeaa7;
+      color: #2d3436;
+      transform: rotateY(180deg);
+    }
+
+    .card.matched {
+      background-color: #00cec9;
+      color: #ffffff;
+      cursor: default;
+      transform: scale(1.05);
+    }
+
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+      font-size: 1.1em;
+      color: #00b894;
+    }
+
+    #tries {
+      color: #d63031;
+      font-weight: bold;
+    }
+
+    #bestScore {
+      color: #fab1a0;
+    }
+
+    #retryBtn {
+      margin-top: 15px;
+      background: none;
+      border: 1px solid #ccc;
+      padding: 8px 16px;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1em;
+    }
+
+    footer {
+      margin-top: 30px;
+      color: #ccc;
+      font-size: 0.85em;
+      text-align: center;
+    }
+
+    @media (max-width: 600px) {
+      .game-board {
+        grid-template-columns: repeat(4, 60px);
+        gap: 8px;
+      }
+      .card {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 لعبة مطابقة البطاقات</h1>
+  <div id="welcomeMsg">مرحباً بك في لعبة مطابقة البطاقات! حاول أن تصل لأعلى مرحلة.</div>
+  <div class="game-info">المرحلة: <span id="level">1</span> | أفضل نتيجة: <span id="bestScore">0</span></div>
+  <div class="game-info">المحاولات المتبقية: <span id="tries">20</span></div>
+  <div class="game-board" id="gameBoard"></div>
+  <div id="status"></div>
+  <button id="retryBtn">🔁 إعادة اللعب</button>
+
+  <footer>
+    &copy; 2025 - تم البرمجة بواسطة Youssef Hamdy 515
+  </footer>
+
+  <!-- المؤثرات الصوتية -->
+  <audio id="flipSound" src="https://assets.mixkit.co/sfx/preview/mixkit-flip-card-game-1106.mp3"></audio>
+  <audio id="matchSound" src="https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3"></audio>
+  <audio id="winSound" src="https://assets.mixkit.co/sfx/preview/mixkit-video-game-win-2016.mp3"></audio>
+
+  <script>
+    const emojiPool = ['🍎','🍌','🍇','🍉','🍍','🍒','🍓','🥝','🍑','🍊','🐶','🐱','🐭','🐰','🦊','🐻','🐼','🐸','🦁','🐯'];
+    let currentLevel = 0;
+    let triesLeft = 20;
+    let flippedCards = [];
+    let matchedCount = 0;
+
+    const gameBoard = document.getElementById('gameBoard');
+    const status = document.getElementById('status');
+    const triesDisplay = document.getElementById('tries');
+    const levelDisplay = document.getElementById('level');
+    const bestScoreDisplay = document.getElementById('bestScore');
+    const retryBtn = document.getElementById('retryBtn');
+
+    const flipSound = document.getElementById('flipSound');
+    const matchSound = document.getElementById('matchSound');
+    const winSound = document.getElementById('winSound');
+
+    let bestScore = localStorage.getItem('bestScore') || 0;
+    bestScoreDisplay.textContent = bestScore;
+
+    function getRandomEmojis(count) {
+      return [...emojiPool].sort(() => Math.random() - 0.5).slice(0, count);
+    }
+
+    function setupLevel() {
+      gameBoard.innerHTML = '';
+      flippedCards = [];
+      matchedCount = 0;
+      status.textContent = '';
+      levelDisplay.textContent = currentLevel + 1;
+      triesLeft = 20;
+      triesDisplay.textContent = triesLeft;
+      retryBtn.style.display = 'none';
+
+      const baseSet = getRandomEmojis(10);
+      const cards = [...baseSet, ...baseSet].sort(() => Math.random() - 0.5);
+
+      cards.forEach((emoji, index) => {
+        const card = document.createElement('div');
+        card.classList.add('card');
+        card.dataset.emoji = emoji;
+        card.dataset.index = index;
+        card.addEventListener('click', () => flipCard(card));
+        gameBoard.appendChild(card);
+      });
+    }
+
+    function flipCard(card) {
+      if (card.classList.contains('flipped') || card.classList.contains('matched') || flippedCards.length >= 2 || triesLeft <= 0) return;
+
+      flipSound.play();
+      card.textContent = card.dataset.emoji;
+      card.classList.add('flipped');
+      flippedCards.push(card);
+
+      if (flippedCards.length === 2) {
+        triesLeft--;
+        triesDisplay.textContent = triesLeft;
+        setTimeout(checkMatch, 800);
+      }
+    }
+
+    function checkMatch() {
+      const [card1, card2] = flippedCards;
+      if (card1.dataset.emoji === card2.dataset.emoji) {
+        matchSound.play();
+        card1.classList.add('matched');
+        card2.classList.add('matched');
+        matchedCount++;
+        if (matchedCount === 10) {
+          winSound.play();
+          currentLevel++;
+          if (currentLevel > bestScore) {
+            bestScore = currentLevel;
+            localStorage.setItem('bestScore', bestScore);
+            bestScoreDisplay.textContent = bestScore;
+          }
+          status.textContent = '✅ أحسنت! المرحلة التالية...';
+          setTimeout(setupLevel, 1500);
+        }
+      } else {
+        card1.classList.remove('flipped');
+        card2.classList.remove('flipped');
+        card1.textContent = '';
+        card2.textContent = '';
+      }
+
+      if (triesLeft <= 0 && matchedCount < 10) {
+        status.textContent = '❌ انتهت المحاولات! اضغط إعادة اللعب.';
+        retryBtn.style.display = 'inline-block';
+        disableAll();
+      }
+
+      flippedCards = [];
+    }
+
+    function disableAll() {
+      document.querySelectorAll('.card').forEach(card => card.removeEventListener('click', flipCard));
+    }
+
+    retryBtn.addEventListener('click', () => {
+      currentLevel = 0;
+      setupLevel();
+      status.textContent = '';
+      retryBtn.style.display = 'none';
+    });
+
+    setupLevel();
+  </script>
+</body>
+</html>
